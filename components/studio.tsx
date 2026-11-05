@@ -19,6 +19,26 @@ const presets: Record<PatternStyle, { edge: number; colors: number }> = {
   outline: { edge: 64, colors: 24 },
   faithful: { edge: 96, colors: 36 },
 };
+async function getImageSize(file: File) {
+  if (typeof createImageBitmap === "function") {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => reject(new Error("IMAGE_DECODE_FAILED"));
+      img.src = url;
+    });
+    return size;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 export default function Studio({ patternId }: { patternId?: string }) {
   const [file, setFile] = useState<File>(),
     [patternName, setPatternName] = useState("我的拼豆图纸"),
@@ -78,18 +98,16 @@ export default function Studio({ patternId }: { patternId?: string }) {
     }
     if (!isHeic && next.type && !["image/jpeg", "image/png", "image/webp"].includes(next.type))
       return setError("请选择 JPEG、PNG、WebP 或手机照片");
-    let b: ImageBitmap;
+    let size: { width: number; height: number };
     try {
-      b = await createImageBitmap(imageFile);
+      size = await getImageSize(imageFile);
     } catch {
       return setError("请选择有效图片；如果是手机照片，请尝试转换为 JPG");
     }
-    if (b.width * b.height > 20000000) {
-      b.close();
+    if (size.width * size.height > 20000000) {
       return setError("图片不能超过 2000 万像素");
     }
-    setRatio(b.width / b.height);
-    b.close();
+    setRatio(size.width / size.height);
     if (image) URL.revokeObjectURL(image);
     setImage(URL.createObjectURL(imageFile));
     setFile(imageFile);
