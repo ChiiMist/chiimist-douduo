@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import heic2any from "heic2any";
 import Cropper from "react-easy-crop";
 import PatternCanvas from "./pattern-canvas";
 import { PALETTE, COLOR_NOTICE } from "@/lib/palette";
@@ -64,9 +65,25 @@ export default function Studio({ patternId }: { patternId?: string }) {
     if (!next) return;
     if ((latest || manual) && !confirm("换图将清空当前版本，继续吗？")) return;
     if (next.size > 10485760) return setError("图片不能超过 10 MB");
-    if (!["image/jpeg", "image/png", "image/webp"].includes(next.type))
-      return setError("请选择 JPEG、PNG 或 WebP");
-    const b = await createImageBitmap(next);
+    const isHeic = /\.(heic|heif)$/i.test(next.name) || ["image/heic", "image/heif"].includes(next.type);
+    let imageFile = next;
+    if (isHeic) {
+      try {
+        const converted = await heic2any({ blob: next, toType: "image/jpeg", quality: 0.92 });
+        const blob = Array.isArray(converted) ? converted[0] : converted;
+        imageFile = new File([blob], next.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+      } catch {
+        return setError("手机照片格式无法读取，请将照片转换为 JPG 后重试");
+      }
+    }
+    if (!isHeic && next.type && !["image/jpeg", "image/png", "image/webp"].includes(next.type))
+      return setError("请选择 JPEG、PNG、WebP 或手机照片");
+    let b: ImageBitmap;
+    try {
+      b = await createImageBitmap(imageFile);
+    } catch {
+      return setError("请选择有效图片；如果是手机照片，请尝试转换为 JPG");
+    }
     if (b.width * b.height > 20000000) {
       b.close();
       return setError("图片不能超过 2000 万像素");
@@ -74,8 +91,8 @@ export default function Studio({ patternId }: { patternId?: string }) {
     setRatio(b.width / b.height);
     b.close();
     if (image) URL.revokeObjectURL(image);
-    setImage(URL.createObjectURL(next));
-    setFile(next);
+    setImage(URL.createObjectURL(imageFile));
+    setFile(imageFile);
     setLatest(undefined);
     setManual(undefined);
     setPast([]);
@@ -208,7 +225,7 @@ export default function Studio({ patternId }: { patternId?: string }) {
               ref={input}
               hidden
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*,.heic,.heif"
               onChange={(e) => {
                 void upload(e.target.files?.[0]);
                 e.target.value = "";

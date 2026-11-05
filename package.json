@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",
+    "heic2any": "^0.0.4",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
