@@ -20,7 +20,11 @@ export async function POST(request:Request) {
   const chunks:Uint8Array[]=[];let size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit+65536){await reader.cancel();throw new ConversionError('FILE_TOO_LARGE','图片不能超过 10 MB。',413);}chunks.push(value);}
   const bounded=new Request(request.url,{method:'POST',headers:{'Content-Type':request.headers.get('content-type')||''},body:Buffer.concat(chunks)});
   let form:FormData;try{form=await bounded.formData();}catch{throw new ConversionError('INVALID_FORM','上传格式无效。');}
-  const file=form.get('image');if(!(file instanceof File)||!file.size)throw new ConversionError('EMPTY','请选择有效图片。');
+  const uploaded=form.get('image');
+  if (!uploaded || typeof uploaded !== 'object' || typeof (uploaded as Blob).arrayBuffer !== 'function' || !(uploaded as Blob).size)
+    throw new ConversionError('EMPTY','请选择有效图片。');
+  const uploadedBlob=uploaded as Blob & { name?: string };
+  const file=uploaded instanceof File ? uploaded : new File([uploadedBlob], uploadedBlob.name || 'upload.jpg', { type: uploadedBlob.type || 'image/jpeg' });
   if(file.size>limit)throw new ConversionError('FILE_TOO_LARGE','图片不能超过 10 MB。',413);
   let input;try{input=JSON.parse(String(form.get('params')));}catch{throw new ConversionError('INVALID_PARAMS','生成参数格式无效。');}
   const parsed=paramsSchema.safeParse(input);if(!parsed.success)throw new ConversionError('INVALID_PARAMS','请检查裁剪范围和生成参数。');
