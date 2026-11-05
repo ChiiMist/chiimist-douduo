@@ -6,6 +6,7 @@ import PatternCanvas from "./pattern-canvas";
 import { PALETTE, COLOR_NOTICE } from "@/lib/palette";
 import { statistics, changeGrid } from "@/lib/pattern";
 import { downloadCsv, downloadPng } from "@/lib/export";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Pattern, Cell, Crop, PatternStyle } from "@/lib/types";
 const modes: [PatternStyle, string, string][] = [
   ["easy", "易拼", "48 格 · 12 色"],
@@ -65,6 +66,10 @@ export default function Studio({ patternId }: { patternId?: string }) {
   const input = useRef<HTMLInputElement>(null);
   const pattern = selected === "manual" ? manual : latest;
   const stats = pattern ? statistics(pattern.grid) : [];
+  async function logout() {
+    await createSupabaseBrowserClient().auth.signOut();
+    window.location.assign("/auth");
+  }
   useEffect(() => {
     if (!patternId) return;
     let cancelled = false;
@@ -218,7 +223,10 @@ export default function Studio({ patternId }: { patternId?: string }) {
         <a className="brand" href="/">
           ▦ <b>豆朵</b>
         </a>
-        <span className="badge">MARD 221 色</span>
+        <div className="header-actions">
+          <span className="badge">MARD 221 色</span>
+          <button className="logout" type="button" onClick={() => void logout()}>退出登录</button>
+        </div>
       </header>
       <main>
         <section className="hero">
