@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import sharp from 'sharp';
+import {convertImage,removeBackground,prioritizeOutlines,quantize,smoothGrid} from '../lib/convert';
+import {PALETTE} from '../lib/palette';
+import {statistics} from '../lib/pattern';
+const params={longEdge:48,maxColors:12,crop:{x:0,y:0,width:1,height:1},background:{remove:false,color:'#ffffff',tolerance:35}};
+test('真实PNG转换：比例、统计、无AI、确定性',async()=>{const buf=await sharp({create:{width:100,height:50,channels:4,background:'#ff0000'}}).png().toBuffer();const p=await convertImage(buf,params);assert.equal(p.path,'cv');assert.equal(p.width,48);assert.equal(p.height,24);assert.equal(statistics(p.grid).reduce((s,c)=>s+c.count,0),48*24);assert.deepEqual(p.grid,(await convertImage(buf,params)).grid);});
+test('拒绝非法格式',async()=>{await assert.rejects(()=>convertImage(Buffer.from('fake image'),params));});
+test('透明像素不计入颜色',()=>{assert.deepEqual(quantize(new Uint8Array([255,0,0,0]),1,1,12),[null]);});
+test('移除边界背景不移除隔离的同色内部',()=>{const a=new Uint8Array(5*5*4);for(let i=0;i<25;i++){a.set([255,255,255,255],i*4);}for(const i of [6,7,8,11,13,16,17,18])a.set([0,0,0,255],i*4);removeBackground(a,5,5,'#ffffff',0);assert.equal(a[3],0);assert.equal(a[12*4+3],255);});
+test('有限用色与区域平滑：孤立近色被合并，高对比轮廓保留',()=>{const pixels=new Uint8Array([255,0,0,255,0,255,0,255,0,0,255,255,255,255,0,255]);const grid=quantize(pixels,4,1,2);assert.ok(new Set(grid.filter(x=>x!==null)).size<=2);const noisy=[0,0,0,0,1,0,0,0,0];assert.equal(smoothGrid(noisy,3,3,1,9999)[4],0);assert.equal(smoothGrid(noisy,3,3,1,0)[4],1);});
+test('深色高对比像素在平滑后仍优先使用深色轮廓',()=>{const data=new Uint8Array(3*3*4);for(let i=0;i<9;i++)data.set([240,180,100,255],i*4);data.set([10,10,10,255],4*4);const dark=PALETTE.findIndex(color=>color.code==='H7');assert.ok(dark>=0);const grid=[dark,0,0,0,0,0,0,0,0];const outlined=prioritizeOutlines(grid,data,3,3);assert.equal(outlined[4],dark);});
